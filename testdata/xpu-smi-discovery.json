@@ -1,0 +1,9 @@
+{
+    "device_id": 0,
+    "device_name": "Intel(R) Arc(TM) A310 LP Graphics",
+    "memory_free_size_byte": "3635109888",
+    "memory_physical_size": "4048.00 MiB",
+    "memory_physical_size_byte": 4244635648,
+    "memory_type": "GDDR6",
+    "pci_bdf_address": "0000:00:10.0"
+}

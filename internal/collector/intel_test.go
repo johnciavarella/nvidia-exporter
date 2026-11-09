@@ -222,3 +222,55 @@ func prometheusGatherer(c prometheus.Collector) prometheus.Gatherer {
 	reg.MustRegister(c)
 	return reg
 }
+
+type fakeXPU struct {
+	stats intel.XPUStats
+	at    time.Time
+	err   error
+}
+
+func (f fakeXPU) Latest() (intel.XPUStats, time.Time, error) { return f.stats, f.at, f.err }
+
+func TestIntelCollector_XPU(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	total := 4244635648.0
+	mock := intel.NewMockProvider()
+	mock.SetError(errors.New("intel_gpu_top failing"))
+
+	c := NewIntel(mock, "default", time.Minute).WithXPU(fakeXPU{
+		stats: intel.XPUStats{MemoryUsedBytes: 396734464, MemoryTotalBytes: &total},
+		at:    now,
+	})
+	c.now = func() time.Time { return now.Add(time.Second) }
+
+	if err := testutil.CollectAndCompare(c, strings.NewReader(`
+# HELP intel_gpu_memory_used_bytes GPU memory in use in bytes, from xpu-smi
+# TYPE intel_gpu_memory_used_bytes gauge
+intel_gpu_memory_used_bytes{device="default"} 3.96734464e+08
+# HELP intel_gpu_memory_total_bytes Physical GPU memory in bytes, from xpu-smi
+# TYPE intel_gpu_memory_total_bytes gauge
+intel_gpu_memory_total_bytes{device="default"} 4.244635648e+09
+# HELP intel_exporter_xpu_error 1 if there is no fresh xpu-smi reading, 0 otherwise (only present when xpu-smi is enabled)
+# TYPE intel_exporter_xpu_error gauge
+intel_exporter_xpu_error{device="default"} 0
+`), "intel_gpu_memory_used_bytes", "intel_gpu_memory_total_bytes", "intel_exporter_xpu_error"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Stale reading: error flag only, no memory metrics.
+	c.now = func() time.Time { return now.Add(time.Hour) }
+	if err := testutil.CollectAndCompare(c, strings.NewReader(`
+# HELP intel_exporter_xpu_error 1 if there is no fresh xpu-smi reading, 0 otherwise (only present when xpu-smi is enabled)
+# TYPE intel_exporter_xpu_error gauge
+intel_exporter_xpu_error{device="default"} 1
+`), "intel_gpu_memory_used_bytes", "intel_gpu_memory_total_bytes", "intel_exporter_xpu_error"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Without a total, only used is exported.
+	c = NewIntel(mock, "default", time.Minute).WithXPU(fakeXPU{stats: intel.XPUStats{MemoryUsedBytes: 1}, at: now})
+	c.now = func() time.Time { return now }
+	if n, _ := testutil.GatherAndCount(prometheusGatherer(c), "intel_gpu_memory_total_bytes"); n != 0 {
+		t.Errorf("memory_total emitted without a total")
+	}
+}

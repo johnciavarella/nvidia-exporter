@@ -1,0 +1,13 @@
+#!/bin/bash
+# Test stand-in for xpu-smi: `discovery ... -j` and `stats ... -j` print fixtures.
+dir="$(dirname "$0")"
+if [ "$FAKE_XPU_FAIL" = "1" ]; then
+  echo "xpu-smi: cannot connect to the XPU Manager daemon" >&2
+  exit 1
+fi
+echo "$@" >> "${FAKE_XPU_ARGS_FILE:-/dev/null}"
+case "$1" in
+  discovery) cat "$dir/xpu-smi-discovery.json" ;;
+  stats)     cat "$dir/xpu-smi-stats.json" ;;
+  *) exit 2 ;;
+esac
