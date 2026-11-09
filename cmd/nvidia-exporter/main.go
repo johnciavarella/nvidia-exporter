@@ -26,6 +26,7 @@ func main() {
 		nvidiaSMIPath   = flag.String("nvidia-smi-path", "nvidia-smi", "Path to nvidia-smi binary")
 		intelGPUTopPath = flag.String("intel-gpu-top-path", "intel_gpu_top", "Path to intel_gpu_top binary (backend=intel)")
 		intelDevice     = flag.String("intel-device", "", "intel_gpu_top device filter, e.g. drm:/dev/dri/renderD128 (backend=intel; default: first GPU)")
+		intelHwmon      = flag.String("intel-hwmon", "auto", "Intel GPU hwmon directory for power/energy/temperature/fan (backend=intel): auto, off, or a path like /sys/class/drm/card1/device/hwmon/hwmon5")
 		collectInterval = flag.Duration("collect-interval", 10*time.Second, "Interval between metric collections (sampling period for backend=intel)")
 		logLevel        = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 	)
@@ -69,6 +70,9 @@ func main() {
 		// A sample is stale after three sampling periods plus a startup margin.
 		coll := collector.NewIntel(provider, device, 3**collectInterval+5*time.Second)
 		reg.MustRegister(coll)
+		if hw := openHwmon(*intelHwmon, *intelDevice, logger); hw != nil {
+			coll.WithHwmon(hw)
+		}
 		go provider.Run(ctx)
 	default:
 		logger.Error("unknown backend, want nvidia or intel", "backend", *backend)
@@ -141,6 +145,30 @@ func main() {
 	}
 
 	logger.Info("shutdown complete")
+}
+
+// openHwmon resolves the --intel-hwmon flag. It returns nil (hwmon metrics
+// disabled) for "off", or for "auto" when no Intel GPU hwmon device is found.
+func openHwmon(setting, device string, logger *slog.Logger) *intel.Hwmon {
+	dir := setting
+	switch setting {
+	case "off":
+		return nil
+	case "auto":
+		var err error
+		dir, err = intel.FindHwmon("/sys", intel.PCISlotFromDevice(device))
+		if err != nil {
+			logger.Info("no Intel GPU hwmon found, hwmon metrics disabled", "error", err)
+			return nil
+		}
+	}
+	hw := intel.NewHwmon(dir)
+	if _, err := hw.Read(); err != nil {
+		logger.Warn("hwmon not readable, hwmon metrics disabled", "dir", dir, "error", err)
+		return nil
+	}
+	logger.Info("hwmon metrics enabled", "dir", dir)
+	return hw
 }
 
 func parseLogLevel(level string) slog.Level {

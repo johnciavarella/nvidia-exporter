@@ -31,6 +31,16 @@ type IntelCollector struct {
 	imcWrite      *prometheus.Desc
 	collectTime   *prometheus.Desc
 	collectError  *prometheus.Desc
+
+	// Optional hwmon sensors (see WithHwmon).
+	hwmon        *intel.Hwmon
+	hwEnergy     *prometheus.Desc
+	hwPower      *prometheus.Desc
+	hwPowerLimit *prometheus.Desc
+	hwVoltage    *prometheus.Desc
+	hwTemp       *prometheus.Desc
+	hwFan        *prometheus.Desc
+	hwmonError   *prometheus.Desc
 }
 
 // NewIntel creates an IntelCollector. device is exposed as the "device" label
@@ -70,7 +80,27 @@ func NewIntel(provider intel.Provider, device string, maxAge time.Duration) *Int
 			"1 if there is no fresh intel_gpu_top sample, 0 otherwise",
 			nil, constLabels,
 		),
+
+		hwEnergy:     desc("gpu", "hwmon_energy_joules_total", "Cumulative GPU energy from the hwmon energy counter in Joules (rate() gives Watts)", nil),
+		hwPower:      desc("gpu", "hwmon_power_watts", "GPU power draw in Watts, derived from the hwmon energy counter between two scrapes", nil),
+		hwPowerLimit: desc("gpu", "hwmon_power_limit_watts", "GPU power limit in Watts from hwmon (if reported)", nil),
+		hwVoltage:    desc("gpu", "hwmon_voltage_volts", "GPU voltage in Volts from hwmon (if reported)", nil),
+		hwTemp:       desc("gpu", "hwmon_temperature_celsius", "GPU temperature in degrees Celsius from hwmon", []string{"sensor"}),
+		hwFan:        desc("gpu", "hwmon_fan_rpm", "GPU fan speed in RPM from hwmon (if reported)", nil),
+		hwmonError: prometheus.NewDesc(
+			prometheus.BuildFQName(intelNamespace, "exporter", "hwmon_error"),
+			"1 if the hwmon sensors could not be read, 0 otherwise (only present when hwmon is enabled)",
+			nil, constLabels,
+		),
 	}
+}
+
+// WithHwmon enables the hwmon sensor metrics (power, energy, voltage,
+// temperature, fan), which are read at scrape time and do not depend on
+// intel_gpu_top. It returns the collector for chaining.
+func (c *IntelCollector) WithHwmon(h *intel.Hwmon) *IntelCollector {
+	c.hwmon = h
+	return c
 }
 
 // Describe implements prometheus.Collector.
@@ -82,10 +112,43 @@ func (c *IntelCollector) Describe(ch chan<- *prometheus.Desc) {
 	} {
 		ch <- d
 	}
+	if c.hwmon != nil {
+		for _, d := range []*prometheus.Desc{
+			c.hwEnergy, c.hwPower, c.hwPowerLimit, c.hwVoltage, c.hwTemp, c.hwFan, c.hwmonError,
+		} {
+			ch <- d
+		}
+	}
+}
+
+func (c *IntelCollector) collectHwmon(ch chan<- prometheus.Metric) {
+	st, err := c.hwmon.Read()
+	if err != nil {
+		ch <- prometheus.MustNewConstMetric(c.hwmonError, prometheus.GaugeValue, 1)
+		return
+	}
+	ch <- prometheus.MustNewConstMetric(c.hwmonError, prometheus.GaugeValue, 0)
+	ch <- prometheus.MustNewConstMetric(c.hwEnergy, prometheus.CounterValue, st.EnergyJoules)
+	opt := func(d *prometheus.Desc, v *float64) {
+		if v != nil {
+			ch <- prometheus.MustNewConstMetric(d, prometheus.GaugeValue, *v)
+		}
+	}
+	opt(c.hwPower, st.PowerWatts)
+	opt(c.hwPowerLimit, st.PowerLimit)
+	opt(c.hwVoltage, st.VoltageV)
+	opt(c.hwFan, st.FanRPM)
+	for name, v := range st.Temps {
+		ch <- prometheus.MustNewConstMetric(c.hwTemp, prometheus.GaugeValue, v, name)
+	}
 }
 
 // Collect implements prometheus.Collector.
 func (c *IntelCollector) Collect(ch chan<- prometheus.Metric) {
+	if c.hwmon != nil {
+		c.collectHwmon(ch)
+	}
+
 	s, at, err := c.provider.Latest()
 
 	if err != nil || c.now().Sub(at) > c.maxAge {

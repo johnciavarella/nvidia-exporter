@@ -2,10 +2,13 @@ package collector
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/woo/nvidia-exporter/internal/intel"
 )
@@ -156,4 +159,66 @@ intel_exporter_collection_error{device="default"} 1
 	if err := testutil.CollectAndCompare(c, strings.NewReader(expected), "intel_exporter_collection_error"); err != nil {
 		t.Error(err)
 	}
+}
+
+func TestIntelCollector_Hwmon(t *testing.T) {
+	dir := t.TempDir()
+	set := func(name, v string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(v+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	set("energy1_input", "10000000")
+	set("power1_max", "31250000")
+	set("temp1_input", "45000")
+	set("temp1_label", "pkg")
+
+	mock := intel.NewMockProvider()
+	mock.SetError(errors.New("intel_gpu_top failing"))
+	c := NewIntel(mock, "default", time.Minute).WithHwmon(intel.NewHwmon(dir))
+
+	// First scrape: energy and limit, no derived power yet. hwmon is reported
+	// even though intel_gpu_top is failing.
+	if err := testutil.CollectAndCompare(c, strings.NewReader(`
+# HELP intel_gpu_hwmon_energy_joules_total Cumulative GPU energy from the hwmon energy counter in Joules (rate() gives Watts)
+# TYPE intel_gpu_hwmon_energy_joules_total counter
+intel_gpu_hwmon_energy_joules_total{device="default"} 10
+# HELP intel_gpu_hwmon_power_limit_watts GPU power limit in Watts from hwmon (if reported)
+# TYPE intel_gpu_hwmon_power_limit_watts gauge
+intel_gpu_hwmon_power_limit_watts{device="default"} 31.25
+# HELP intel_gpu_hwmon_temperature_celsius GPU temperature in degrees Celsius from hwmon
+# TYPE intel_gpu_hwmon_temperature_celsius gauge
+intel_gpu_hwmon_temperature_celsius{device="default",sensor="pkg"} 45
+# HELP intel_exporter_hwmon_error 1 if the hwmon sensors could not be read, 0 otherwise (only present when hwmon is enabled)
+# TYPE intel_exporter_hwmon_error gauge
+intel_exporter_hwmon_error{device="default"} 0
+# HELP intel_exporter_collection_error 1 if there is no fresh intel_gpu_top sample, 0 otherwise
+# TYPE intel_exporter_collection_error gauge
+intel_exporter_collection_error{device="default"} 1
+`)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Second scrape after the counter advanced: power is derived.
+	time.Sleep(150 * time.Millisecond)
+	set("energy1_input", "11000000")
+	n, err := testutil.GatherAndCount(prometheusGatherer(c), "intel_gpu_hwmon_power_watts")
+	if err != nil || n != 1 {
+		t.Errorf("power metric count = %d, err = %v, want 1", n, err)
+	}
+
+	// Unreadable hwmon is reported without breaking the rest.
+	if err := os.Remove(filepath.Join(dir, "energy1_input")); err != nil {
+		t.Fatal(err)
+	}
+	n, _ = testutil.GatherAndCount(prometheusGatherer(c), "intel_exporter_hwmon_error")
+	if n != 1 {
+		t.Errorf("hwmon_error count = %d, want 1", n)
+	}
+}
+
+func prometheusGatherer(c prometheus.Collector) prometheus.Gatherer {
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(c)
+	return reg
 }
