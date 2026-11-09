@@ -41,6 +41,12 @@ type IntelCollector struct {
 	hwTemp       *prometheus.Desc
 	hwFan        *prometheus.Desc
 	hwmonError   *prometheus.Desc
+
+	// Optional xpu-smi memory metrics (see WithXPU).
+	xpu      intel.XPUProvider
+	memUsed  *prometheus.Desc
+	memTotal *prometheus.Desc
+	xpuError *prometheus.Desc
 }
 
 // NewIntel creates an IntelCollector. device is exposed as the "device" label
@@ -87,12 +93,27 @@ func NewIntel(provider intel.Provider, device string, maxAge time.Duration) *Int
 		hwVoltage:    desc("gpu", "hwmon_voltage_volts", "GPU voltage in Volts from hwmon (if reported)", nil),
 		hwTemp:       desc("gpu", "hwmon_temperature_celsius", "GPU temperature in degrees Celsius from hwmon", []string{"sensor"}),
 		hwFan:        desc("gpu", "hwmon_fan_rpm", "GPU fan speed in RPM from hwmon (if reported)", nil),
+		memUsed:      desc("gpu", "memory_used_bytes", "GPU memory in use in bytes, from xpu-smi", nil),
+		memTotal:     desc("gpu", "memory_total_bytes", "Physical GPU memory in bytes, from xpu-smi", nil),
+		xpuError: prometheus.NewDesc(
+			prometheus.BuildFQName(intelNamespace, "exporter", "xpu_error"),
+			"1 if there is no fresh xpu-smi reading, 0 otherwise (only present when xpu-smi is enabled)",
+			nil, constLabels,
+		),
 		hwmonError: prometheus.NewDesc(
 			prometheus.BuildFQName(intelNamespace, "exporter", "hwmon_error"),
 			"1 if the hwmon sensors could not be read, 0 otherwise (only present when hwmon is enabled)",
 			nil, constLabels,
 		),
 	}
+}
+
+// WithXPU enables the xpu-smi memory metrics (used and total GPU memory). They
+// do not depend on intel_gpu_top. A reading older than the collector's maxAge
+// is reported as intel_exporter_xpu_error=1 with no memory metrics.
+func (c *IntelCollector) WithXPU(x intel.XPUProvider) *IntelCollector {
+	c.xpu = x
+	return c
 }
 
 // WithHwmon enables the hwmon sensor metrics (power, energy, voltage,
@@ -112,12 +133,30 @@ func (c *IntelCollector) Describe(ch chan<- *prometheus.Desc) {
 	} {
 		ch <- d
 	}
+	if c.xpu != nil {
+		for _, d := range []*prometheus.Desc{c.memUsed, c.memTotal, c.xpuError} {
+			ch <- d
+		}
+	}
 	if c.hwmon != nil {
 		for _, d := range []*prometheus.Desc{
 			c.hwEnergy, c.hwPower, c.hwPowerLimit, c.hwVoltage, c.hwTemp, c.hwFan, c.hwmonError,
 		} {
 			ch <- d
 		}
+	}
+}
+
+func (c *IntelCollector) collectXPU(ch chan<- prometheus.Metric) {
+	st, at, err := c.xpu.Latest()
+	if err != nil || c.now().Sub(at) > c.maxAge {
+		ch <- prometheus.MustNewConstMetric(c.xpuError, prometheus.GaugeValue, 1)
+		return
+	}
+	ch <- prometheus.MustNewConstMetric(c.xpuError, prometheus.GaugeValue, 0)
+	ch <- prometheus.MustNewConstMetric(c.memUsed, prometheus.GaugeValue, st.MemoryUsedBytes)
+	if st.MemoryTotalBytes != nil {
+		ch <- prometheus.MustNewConstMetric(c.memTotal, prometheus.GaugeValue, *st.MemoryTotalBytes)
 	}
 }
 
@@ -147,6 +186,9 @@ func (c *IntelCollector) collectHwmon(ch chan<- prometheus.Metric) {
 func (c *IntelCollector) Collect(ch chan<- prometheus.Metric) {
 	if c.hwmon != nil {
 		c.collectHwmon(ch)
+	}
+	if c.xpu != nil {
+		c.collectXPU(ch)
 	}
 
 	s, at, err := c.provider.Latest()

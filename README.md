@@ -44,6 +44,8 @@ go build -o bin/nvidia-exporter ./cmd/nvidia-exporter
 | `--intel-gpu-top-path` | `intel_gpu_top` | Path to intel_gpu_top binary (`--backend=intel`) |
 | `--intel-device` | _(first GPU)_ | intel_gpu_top `-d` device filter, e.g. `drm:/dev/dri/renderD128` (`--backend=intel`) |
 | `--intel-hwmon` | `auto` | Intel GPU hwmon directory for power/energy/temperature/fan (`--backend=intel`): `auto` (find the Intel GPU under `/sys/class/drm`), `off`, or a path such as `/sys/class/drm/card1/device/hwmon/hwmon5` |
+| `--intel-xpu-smi-path` | _(off)_ | Path to Intel `xpu-smi`; when set, GPU memory used/total is exported (`--backend=intel`; needs root and a working `xpu-smi`) |
+| `--intel-xpu-device` | `0` | `xpu-smi` device id used with `--intel-xpu-smi-path` |
 | `--collect-interval` | `10s` | Interval between metric collections (sampling period for `--backend=intel`) |
 | `--log-level` | `info` | Log level (debug, info, warn, error) |
 
@@ -94,6 +96,7 @@ Requirements:
 
 - `intel_gpu_top` needs permission to read GPU performance counters: run as root, or grant `CAP_PERFMON` (systemd: `AmbientCapabilities=CAP_PERFMON`), or set `kernel.perf_event_paranoid=0`. It also needs access to `/dev/dri`.
 - `intel_gpu_top` does not report power on discrete Arc cards (and never reports VRAM). Power, temperature and fan data come from the i915/xe **hwmon** interface instead (`--intel-hwmon`, on by default when an Intel GPU hwmon directory is found). Which sensors exist depends on the card and kernel: the `hwmon_*` metrics other than energy are only emitted if the driver provides them. hwmon is read at scrape time and works even if `intel_gpu_top` is failing.
+- Neither `intel_gpu_top` nor hwmon reports memory use on Arc. With `--intel-xpu-smi-path=xpu-smi` the exporter polls `xpu-smi stats -d <id> -j` every collection interval for used memory, and reads the physical size once from `xpu-smi discovery -d <id> -j`. Like hwmon, it is independent of `intel_gpu_top`. It is off by default because it needs Intel's `xpu-smi` installed.
 - Power is derived from the `energy1_input` counter between two scrapes, so it appears from the second scrape on. `rate(intel_gpu_hwmon_energy_joules_total[5m])` gives the same number in Prometheus.
 - With `--intel-device pci:slot=0000:00:10.0` (or a `sys:` path) the hwmon of that PCI device is used; otherwise the first Intel GPU.
 
@@ -118,6 +121,9 @@ All Intel metrics carry a `device` label (the `--intel-device` value, or `defaul
 | `intel_gpu_hwmon_voltage_volts` | gauge | | Voltage (`in0_input`), if reported |
 | `intel_gpu_hwmon_temperature_celsius` | gauge | `sensor` | Temperatures (`temp*_input`, named by `temp*_label`), if reported |
 | `intel_gpu_hwmon_fan_rpm` | gauge | | Fan speed (`fan1_input`), if reported |
+| `intel_gpu_memory_used_bytes` | gauge | | GPU memory in use, from `xpu-smi` (only with `--intel-xpu-smi-path`) |
+| `intel_gpu_memory_total_bytes` | gauge | | Physical GPU memory, from `xpu-smi discovery` (only once discovery has succeeded) |
+| `intel_exporter_xpu_error` | gauge | | 1 if there is no fresh `xpu-smi` reading, 0 otherwise (only present with `--intel-xpu-smi-path`) |
 | `intel_exporter_hwmon_error` | gauge | | 1 if hwmon is enabled but unreadable (only present when hwmon is enabled) |
 | `intel_exporter_last_collection_timestamp_seconds` | gauge | | Unix time of the last `intel_gpu_top` sample |
 | `intel_exporter_collection_error` | gauge | | 1 if there is no fresh sample (process failing, no data yet, or sample older than 3 sampling periods + 5s), 0 otherwise. GPU metrics are omitted while it is 1. |

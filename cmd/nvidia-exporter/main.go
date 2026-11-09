@@ -27,6 +27,8 @@ func main() {
 		intelGPUTopPath = flag.String("intel-gpu-top-path", "intel_gpu_top", "Path to intel_gpu_top binary (backend=intel)")
 		intelDevice     = flag.String("intel-device", "", "intel_gpu_top device filter, e.g. drm:/dev/dri/renderD128 (backend=intel; default: first GPU)")
 		intelHwmon      = flag.String("intel-hwmon", "auto", "Intel GPU hwmon directory for power/energy/temperature/fan (backend=intel): auto, off, or a path like /sys/class/drm/card1/device/hwmon/hwmon5")
+		intelXPUSMI     = flag.String("intel-xpu-smi-path", "", "Path to xpu-smi; when set, GPU memory used/total is exported (backend=intel; needs root)")
+		intelXPUDevice  = flag.String("intel-xpu-device", "0", "xpu-smi device id for --intel-xpu-smi-path (backend=intel)")
 		collectInterval = flag.Duration("collect-interval", 10*time.Second, "Interval between metric collections (sampling period for backend=intel)")
 		logLevel        = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 	)
@@ -72,6 +74,12 @@ func main() {
 		reg.MustRegister(coll)
 		if hw := openHwmon(*intelHwmon, *intelDevice, logger); hw != nil {
 			coll.WithHwmon(hw)
+		}
+		if *intelXPUSMI != "" {
+			xpu := intel.NewXPU(*intelXPUSMI, *intelXPUDevice, *collectInterval, logger)
+			coll.WithXPU(xpu)
+			go xpu.Run(ctx)
+			logger.Info("xpu-smi memory metrics enabled", "path", *intelXPUSMI, "device", *intelXPUDevice)
 		}
 		go provider.Run(ctx)
 	default:
