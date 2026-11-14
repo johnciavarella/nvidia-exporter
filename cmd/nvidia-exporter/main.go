@@ -19,6 +19,9 @@ import (
 	"github.com/woo/nvidia-exporter/internal/nvidia"
 )
 
+// version is set at build time with -ldflags "-X main.version=v1.2.3".
+var version = "dev"
+
 func main() {
 	var (
 		listenAddress   = flag.String("listen-address", ":9835", "Address to listen on for HTTP requests")
@@ -34,8 +37,14 @@ func main() {
 		legacyMetrics   = flag.Bool("legacy-metrics", true, "Also export the vendor-prefixed nvidia_*/intel_* metrics that duplicate the common gpu_* metrics")
 		collectInterval = flag.Duration("collect-interval", 10*time.Second, "Interval between metric collections (sampling period for backend=intel)")
 		logLevel        = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
+		showVersion     = flag.Bool("version", false, "Print the version and exit")
 	)
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("nvidia-exporter", version)
+		return
+	}
 
 	// Setup logger
 	level := parseLogLevel(*logLevel)
@@ -43,6 +52,7 @@ func main() {
 	slog.SetDefault(logger)
 
 	logger.Info("starting nvidia-exporter",
+		"version", version,
 		"backend", *backend,
 		"listen_address", *listenAddress,
 		"metrics_path", *metricsPath,
@@ -60,6 +70,11 @@ func main() {
 
 	// Create the collector for the selected backend and start it
 	reg := prometheus.NewRegistry()
+	reg.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name:        "gpu_exporter_build_info",
+		Help:        "Always 1; the version label is the exporter version",
+		ConstLabels: prometheus.Labels{"version": version},
+	}, func() float64 { return 1 }))
 	title := "NVIDIA Exporter"
 	switch *backend {
 	case "nvidia":

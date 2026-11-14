@@ -59,6 +59,7 @@ go build -o bin/nvidia-exporter ./cmd/nvidia-exporter
 | `--intel-xpu-device` | `0` | `xpu-smi` device id used with `--intel-xpu-smi-path` |
 | `--collect-interval` | `10s` | Interval between metric collections (sampling period for `--backend=intel`) |
 | `--log-level` | `info` | Log level (debug, info, warn, error) |
+| `--version` | | Print the version and exit |
 
 ### Endpoints
 
