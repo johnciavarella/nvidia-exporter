@@ -17,7 +17,7 @@ type rawSample struct {
 	Interrupts struct {
 		Count float64 `json:"count"`
 	} `json:"interrupts"`
-	RC6 struct {
+	RC6 *struct {
 		Value float64 `json:"value"`
 	} `json:"rc6"`
 	Power struct {
@@ -41,10 +41,12 @@ func (r *rawSample) sample() Sample {
 		FrequencyActual:    r.Frequency.Actual,
 		FrequencyRequested: r.Frequency.Requested,
 		Interrupts:         r.Interrupts.Count,
-		RC6:                r.RC6.Value,
 		PowerGPU:           r.Power.GPU,
 		PowerPackage:       r.Power.Package,
 		Engines:            make(map[string]EngineStats, len(r.Engines)),
+	}
+	if r.RC6 != nil {
+		s.RC6, s.HasRC6 = r.RC6.Value, true
 	}
 	if r.IMC != nil {
 		reads, writes := r.IMC.Reads, r.IMC.Writes

@@ -78,7 +78,7 @@ Per-GPU labels: `gpu` (index on the host: nvidia-smi index, DRM card number for 
 
 | Metric | Type | NVIDIA | AMD | Intel |
 |--------|------|--------|-----|-------|
-| `gpu_utilization_ratio` | gauge | `utilization.gpu` | `gpu_busy_percent` | busiest `intel_gpu_top` engine |
+| `gpu_utilization_ratio` | gauge | `utilization.gpu` | `gpu_busy_percent` | estimated from RC6 and engine busy times, see [Intel utilization](#intel-utilization) |
 | `gpu_memory_utilization_ratio` | gauge | `utilization.memory` | `mem_busy_percent` | |
 | `gpu_memory_used_bytes` | gauge | `memory.used` | `mem_info_vram_used` | `xpu-smi` |
 | `gpu_memory_total_bytes` | gauge | `memory.total` | `mem_info_vram_total` | `xpu-smi` |
@@ -153,6 +153,16 @@ Requirements:
 - Power is derived from the `energy1_input` counter between two scrapes, so it appears from the second scrape on. `rate(intel_gpu_hwmon_energy_joules_total[5m])` gives the same number in Prometheus.
 - With `--intel-device pci:slot=0000:00:10.0` (or a `sys:` path) the hwmon of that PCI device is used; otherwise the first Intel GPU.
 
+### Intel utilization
+
+`nvidia-smi`'s utilization is the share of time *any* engine was busy. `intel_gpu_top` only reports busy time per engine (render, video, video enhance, blitter, compute), and engines run at the same time, so the overall value is not reported directly. `gpu_utilization_ratio` for Intel is estimated as:
+
+- **1 − RC6**: the share of the sampling period the GPU was awake, out of its RC6 sleep state. This is the closest match to "the GPU was doing something".
+- **clamped** to at least the busiest engine and at most the sum of all engines (capped at 1), the bounds the true value must lie in. The clamp corrects 1 − RC6 reading high when the GPU stays awake briefly after work, or reads 100% because RC6 is disabled.
+- If `intel_gpu_top` does not report RC6, the busiest engine is used.
+
+For example, Video at 80% and Render at 37.5% give a value between 0.8 and 1, depending on how much RC6 time there was. Per-engine detail stays in `intel_gpu_engine_busy_ratio`; `max(intel_gpu_engine_busy_ratio)` gives the busiest engine.
+
 Intel GPUs also export the [common metrics](#common-metrics), combined from all three sources: hwmon and `xpu-smi` values are exported even while `intel_gpu_top` is failing. In those, `id` is the PCI address of the hwmon device (else the `--intel-device` value, or `default`) and `name` its PCI ID.
 
 The `intel_*` metrics below carry a `device` label (the `--intel-device` value, or `default`). Those marked **legacy** duplicate a common metric and are only exported with `--legacy-metrics=true` (the default).
@@ -164,7 +174,7 @@ The `intel_*` metrics below carry a `device` label (the `--intel-device` value, 
 | `intel_gpu_engine_wait_ratio` | gauge | `engine` | Time waiting on an event (0-1) |
 | `intel_gpu_frequency_actual_hz` | gauge | | **Legacy** (`gpu_clock_graphics_hz`). Actual GPU frequency in Hz |
 | `intel_gpu_frequency_requested_hz` | gauge | | Requested GPU frequency in Hz |
-| `intel_gpu_rc6_ratio` | gauge | | Fraction of time in the RC6 power-saving state (0-1) |
+| `intel_gpu_rc6_ratio` | gauge | | Fraction of time in the RC6 power-saving state (0-1), if reported |
 | `intel_gpu_interrupts_per_second` | gauge | | GPU interrupts per second |
 | `intel_gpu_power_gpu_watts` | gauge | | GPU power draw in Watts (if reported) |
 | `intel_gpu_power_package_watts` | gauge | | Package power draw in Watts (if reported) |

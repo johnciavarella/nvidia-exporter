@@ -20,7 +20,7 @@ func TestAMDCollector_EmitsCommonMetrics(t *testing.T) {
 
 	const l = `gpu="1",id="0000:03:00.0",name="1002:744c",vendor="amd"`
 	expected := `
-# HELP gpu_utilization_ratio GPU utilization (0-1). Intel: the busiest engine.
+# HELP gpu_utilization_ratio GPU utilization (0-1). Intel: time out of RC6, bounded by the engine busy times.
 # TYPE gpu_utilization_ratio gauge
 gpu_utilization_ratio{` + l + `} 0.42
 # HELP gpu_memory_used_bytes GPU memory used in bytes

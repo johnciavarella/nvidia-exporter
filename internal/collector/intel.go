@@ -245,11 +245,7 @@ func (c *IntelCollector) Collect(ch chan<- prometheus.Metric) {
 	s, at, err := c.provider.Latest()
 	fresh := err == nil && c.now().Sub(at) <= c.maxAge
 	if fresh {
-		busiest := 0.0
-		for _, e := range s.Engines {
-			busiest = max(busiest, e.Busy/100)
-		}
-		cs.Utilization = f64(busiest)
+		cs.Utilization = f64(intelUtilization(s))
 		cs.ClockGraphics = f64(s.FrequencyActual * 1e6)
 		if cs.PowerDraw == nil && s.PowerGPU != nil {
 			cs.PowerDraw = s.PowerGPU
@@ -279,7 +275,9 @@ func (c *IntelCollector) Collect(ch chan<- prometheus.Metric) {
 		gauge(c.engineWait, e.Wait/100, name)
 	}
 	gauge(c.freqRequested, s.FrequencyRequested*1e6)
-	gauge(c.rc6, s.RC6/100)
+	if s.HasRC6 {
+		gauge(c.rc6, s.RC6/100)
+	}
 	gauge(c.interrupts, s.Interrupts)
 	if s.PowerGPU != nil {
 		gauge(c.powerGPU, *s.PowerGPU)
@@ -299,4 +297,25 @@ func (c *IntelCollector) Collect(ch chan<- prometheus.Metric) {
 		gauge(c.collectTime, float64(at.Unix()))
 		gauge(c.collectError, 0)
 	}
+}
+
+// intelUtilization estimates the fraction of the sampling period during which
+// any engine was busy, which is what nvidia-smi's utilization.gpu means.
+// intel_gpu_top only reports busy time per engine, and engines overlap, so the
+// true value lies between the busiest engine and the sum of all engines
+// (capped at 1). The time the GPU was out of RC6 (1 - RC6) estimates it
+// directly but reads a little high: the GPU stays awake briefly after work,
+// and reads 1 when RC6 is disabled. It is therefore clamped to the engine
+// bounds. Without RC6 the busiest engine (the lower bound) is used.
+func intelUtilization(s intel.Sample) float64 {
+	lo, sum := 0.0, 0.0
+	for _, e := range s.Engines {
+		b := e.Busy / 100
+		lo = max(lo, b)
+		sum += b
+	}
+	if !s.HasRC6 {
+		return lo
+	}
+	return min(max(1-s.RC6/100, lo), min(1, sum))
 }

@@ -59,7 +59,7 @@ func newCommonDescs() *commonDescs {
 		return prometheus.NewDesc(prometheus.BuildFQName(commonNamespace, "exporter", name), help, []string{"vendor"}, nil)
 	}
 	return &commonDescs{
-		utilization:    desc("", "utilization_ratio", "GPU utilization (0-1). Intel: the busiest engine."),
+		utilization:    desc("", "utilization_ratio", "GPU utilization (0-1). Intel: time out of RC6, bounded by the engine busy times."),
 		memUtilization: desc("memory", "utilization_ratio", "Memory controller utilization (0-1)"),
 		memUsed:        desc("memory", "used_bytes", "GPU memory used in bytes"),
 		memTotal:       desc("memory", "total_bytes", "GPU memory total in bytes"),

@@ -43,7 +43,7 @@ func TestCollector_LegacyOff(t *testing.T) {
 		t.Errorf("legacy metric emitted with legacy off")
 	}
 	expected := `
-# HELP gpu_utilization_ratio GPU utilization (0-1). Intel: the busiest engine.
+# HELP gpu_utilization_ratio GPU utilization (0-1). Intel: time out of RC6, bounded by the engine busy times.
 # TYPE gpu_utilization_ratio gauge
 gpu_utilization_ratio{gpu="0",id="GPU-u",name="Test GPU",vendor="nvidia"} 0.5
 # HELP nvidia_gpu_performance_state Performance state (0=P0 max performance, 15=P15 min)
@@ -70,7 +70,7 @@ func TestIntelCollector_Common(t *testing.T) {
 
 	const l = `gpu="0",id="default",name="",vendor="intel"`
 	expected := `
-# HELP gpu_utilization_ratio GPU utilization (0-1). Intel: the busiest engine.
+# HELP gpu_utilization_ratio GPU utilization (0-1). Intel: time out of RC6, bounded by the engine busy times.
 # TYPE gpu_utilization_ratio gauge
 gpu_utilization_ratio{` + l + `} 0.8
 # HELP gpu_clock_graphics_hz Graphics clock in Hz
@@ -107,5 +107,32 @@ gpu_exporter_collection_error{vendor="intel"} 0
 	}
 	if n := testutil.CollectAndCount(c, "gpu_utilization_ratio"); n != 0 {
 		t.Errorf("utilization exported while intel_gpu_top fails")
+	}
+}
+
+func TestIntelUtilization(t *testing.T) {
+	engines := func(busy ...float64) map[string]intel.EngineStats {
+		m := map[string]intel.EngineStats{}
+		for i, b := range busy {
+			m[string(rune('a'+i))] = intel.EngineStats{Busy: b}
+		}
+		return m
+	}
+	cases := []struct {
+		name string
+		s    intel.Sample
+		want float64
+	}{
+		{"rc6 inside bounds", intel.Sample{RC6: 50, HasRC6: true, Engines: engines(30, 40)}, 0.5},
+		{"rc6 disabled, capped at engine sum", intel.Sample{RC6: 0, HasRC6: true, Engines: engines(10, 5)}, 0.15},
+		{"awake but idle", intel.Sample{RC6: 20, HasRC6: true, Engines: engines(0, 0)}, 0},
+		{"rc6 below busiest engine", intel.Sample{RC6: 90, HasRC6: true, Engines: engines(60, 20)}, 0.6},
+		{"overlapping engines saturate at 1", intel.Sample{RC6: 0, HasRC6: true, Engines: engines(90, 80)}, 1},
+		{"no rc6: busiest engine", intel.Sample{Engines: engines(30, 70)}, 0.7},
+	}
+	for _, tc := range cases {
+		if got := intelUtilization(tc.s); got < tc.want-1e-9 || got > tc.want+1e-9 {
+			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
+		}
 	}
 }

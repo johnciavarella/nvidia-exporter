@@ -22,6 +22,7 @@ func testSample() intel.Sample {
 		FrequencyRequested: 1200,
 		Interrupts:         1523.5,
 		RC6:                62.5,
+		HasRC6:             true,
 		PowerGPU:           ptr(14.25),
 		PowerPackage:       ptr(28.5),
 		IMCReads:           ptr(100),
