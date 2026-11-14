@@ -22,6 +22,7 @@ func testSample() intel.Sample {
 		FrequencyRequested: 1200,
 		Interrupts:         1523.5,
 		RC6:                62.5,
+		HasRC6:             true,
 		PowerGPU:           ptr(14.25),
 		PowerPackage:       ptr(28.5),
 		IMCReads:           ptr(100),
@@ -195,7 +196,8 @@ intel_exporter_hwmon_error{device="default"} 0
 # HELP intel_exporter_collection_error 1 if there is no fresh intel_gpu_top sample, 0 otherwise
 # TYPE intel_exporter_collection_error gauge
 intel_exporter_collection_error{device="default"} 1
-`)); err != nil {
+`), "intel_gpu_hwmon_energy_joules_total", "intel_gpu_hwmon_power_limit_watts", "intel_gpu_hwmon_temperature_celsius",
+		"intel_exporter_hwmon_error", "intel_exporter_collection_error", "intel_gpu_hwmon_power_watts"); err != nil {
 		t.Fatal(err)
 	}
 

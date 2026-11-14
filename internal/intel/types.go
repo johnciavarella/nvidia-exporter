@@ -22,6 +22,7 @@ type Sample struct {
 	FrequencyRequested float64 // MHz
 	Interrupts         float64 // interrupts per second
 	RC6                float64 // % of the period spent in the RC6 power-saving state
+	HasRC6             bool    // false if intel_gpu_top did not report rc6 (RC6 is then 0)
 	PowerGPU           *float64
 	PowerPackage       *float64 // W
 	IMCReads           *float64 // MiB/s of memory-controller reads

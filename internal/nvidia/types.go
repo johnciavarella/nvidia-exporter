@@ -16,4 +16,11 @@ type GPUStats struct {
 	ClockGraphics    float64 // Graphics clock (MHz)
 	ClockMemory      float64 // Memory clock (MHz)
 	PerformanceState int     // Performance state (0-15, P0=max performance)
+
+	// NA holds the nvidia-smi query fields (for example "power.draw") that were
+	// reported as [N/A] or [Not Supported]. Their numeric value above is 0.
+	NA map[string]bool
 }
+
+// Supported reports whether nvidia-smi returned a value for the query field.
+func (g GPUStats) Supported(field string) bool { return !g.NA[field] }

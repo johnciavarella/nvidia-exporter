@@ -51,7 +51,7 @@ func TestParseSample(t *testing.T) {
 	if s.FrequencyActual != 1180.5 || s.FrequencyRequested != 1200 {
 		t.Errorf("frequency = %v / %v", s.FrequencyActual, s.FrequencyRequested)
 	}
-	if s.Interrupts != 1523.5 || s.RC6 != 62.5 {
+	if s.Interrupts != 1523.5 || s.RC6 != 62.5 || !s.HasRC6 {
 		t.Errorf("interrupts = %v, rc6 = %v", s.Interrupts, s.RC6)
 	}
 	if s.PowerGPU == nil || *s.PowerGPU != 14.25 || s.PowerPackage == nil || *s.PowerPackage != 28.5 {
@@ -73,6 +73,9 @@ func TestParseSample_OptionalFieldsAbsent(t *testing.T) {
 	s, err := ParseSample([]byte(raw))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if s.HasRC6 {
+		t.Error("HasRC6 set without an rc6 field")
 	}
 	if s.PowerGPU == nil || *s.PowerGPU != 1.1 {
 		t.Errorf("PowerGPU = %v", s.PowerGPU)
