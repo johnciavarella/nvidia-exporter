@@ -1,0 +1,2920 @@
+{
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "10.4.0"
+    },
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "table",
+      "name": "Table",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "state-timeline",
+      "name": "State timeline",
+      "version": ""
+    }
+  ],
+  "id": null,
+  "uid": "nvidia-exporter-gpus",
+  "title": "GPUs (nvidia-exporter)",
+  "description": "NVIDIA, AMD and Intel GPUs from nvidia-exporter 0.5.0+ (https://github.com/johnciavarella/nvidia-exporter): the common gpu_* metrics plus vendor-specific panels.",
+  "tags": [
+    "gpu",
+    "nvidia",
+    "amd",
+    "intel",
+    "nvidia-exporter"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "editable": true,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "links": [
+    {
+      "title": "nvidia-exporter",
+      "type": "link",
+      "icon": "external link",
+      "targetBlank": true,
+      "url": "https://github.com/johnciavarella/nvidia-exporter"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Data source",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0,
+        "refresh": 1
+      },
+      {
+        "name": "hostlabel",
+        "label": "Host label",
+        "type": "custom",
+        "description": "The label that names a host: `instance` for a plain Prometheus scrape, or the label your pipeline adds (for example `host_name` from OpenTelemetry).",
+        "query": "instance,host_name,hostname,host,node,nodename",
+        "current": {
+          "text": "instance",
+          "value": "instance"
+        },
+        "multi": false,
+        "includeAll": false,
+        "allowCustomValue": true,
+        "options": [
+          {
+            "text": "instance",
+            "value": "instance",
+            "selected": true
+          },
+          {
+            "text": "host_name",
+            "value": "host_name",
+            "selected": false
+          },
+          {
+            "text": "hostname",
+            "value": "hostname",
+            "selected": false
+          },
+          {
+            "text": "host",
+            "value": "host",
+            "selected": false
+          },
+          {
+            "text": "node",
+            "value": "node",
+            "selected": false
+          },
+          {
+            "text": "nodename",
+            "value": "nodename",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "name": "job",
+        "label": "Job",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(gpu_exporter_collection_error, job)",
+          "refId": "job"
+        },
+        "definition": "label_values(gpu_exporter_collection_error, job)",
+        "multi": true,
+        "includeAll": true,
+        "current": {},
+        "refresh": 2,
+        "sort": 1
+      },
+      {
+        "name": "vendor",
+        "label": "Vendor",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(gpu_exporter_collection_error{job=~\"${job:regex}\"}, vendor)",
+          "refId": "vendor"
+        },
+        "definition": "label_values(gpu_exporter_collection_error{job=~\"${job:regex}\"}, vendor)",
+        "multi": true,
+        "includeAll": true,
+        "current": {},
+        "refresh": 2,
+        "sort": 1
+      },
+      {
+        "name": "host",
+        "label": "Host",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(gpu_exporter_collection_error{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\"}, ${hostlabel})",
+          "refId": "host"
+        },
+        "definition": "label_values(gpu_exporter_collection_error{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\"}, ${hostlabel})",
+        "multi": true,
+        "includeAll": true,
+        "current": {},
+        "refresh": 2,
+        "sort": 1
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Overview",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Exporters with errors",
+      "description": "Exporters whose last collection failed (gpu_exporter_collection_error = 1). 0 = all healthy.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(max by (host, vendor) (label_replace(gpu_exporter_collection_error{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))) or vector(0)",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#e66767"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "0 · all OK",
+                  "color": "#0ca30c"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 1,
+                "to": 1000000000.0,
+                "result": {
+                  "color": "#e66767"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "GPU power now",
+      "description": "Total current power draw of the selected GPUs.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(max by (host, vendor, gpu, name) (label_replace(gpu_power_draw_watts{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\")))",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#8e8c84"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Busiest GPU",
+      "description": "Highest current utilization among the selected GPUs.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "max(max by (host, vendor, gpu, name) (label_replace(gpu_utilization_ratio{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\")))",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#8e8c84"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Hottest sensor",
+      "description": "Highest current temperature of any sensor on the selected GPUs.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "max(max by (host, vendor, gpu, name) (label_replace(gpu_temperature_celsius{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\")))",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#8e8c84"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "GPUs",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "One row per GPU. Bars are a share of 0-100%. An empty cell means that GPU does not report the value.",
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_utilization_ratio{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "refId": "A"
+        },
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_memory_used_bytes{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\")) / max by (host, vendor, gpu, name) (label_replace(gpu_memory_total_bytes{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "refId": "B"
+        },
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_memory_total_bytes{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "refId": "C"
+        },
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_power_draw_watts{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "refId": "D"
+        },
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_power_limit_watts{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "refId": "E"
+        },
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_temperature_celsius{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "refId": "F"
+        },
+        {
+          "expr": "max by (host, vendor) (label_replace(gpu_exporter_collection_error{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "refId": "G"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "gpu": true
+            },
+            "indexByName": {
+              "host": 0,
+              "vendor": 1,
+              "name": 2
+            },
+            "renameByName": {
+              "host": "Host",
+              "vendor": "Vendor",
+              "name": "GPU",
+              "Value #A": "Utilization",
+              "Value #B": "VRAM used",
+              "Value #C": "VRAM total",
+              "Value #D": "Power",
+              "Value #E": "Power limit",
+              "Value #F": "Hottest sensor",
+              "Value #G": "Exporter"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Utilization"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#6f8fb3"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "VRAM used"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#6f8fb3"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "VRAM total"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Power"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "watt"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Power limit"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "watt"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Hottest sensor"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "celsius"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Exporter"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "OK",
+                        "color": "#0ca30c",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "ERROR",
+                        "color": "#e66767",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "row",
+      "title": "Utilization & memory",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "GPU utilization",
+      "description": "NVIDIA: utilization.gpu. AMD: gpu_busy_percent. Intel: estimated from RC6 residency, bounded by the engine busy times.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_utilization_ratio{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "VRAM used (% of total)",
+      "description": "VRAM in use as a share of the card's total. Inference servers such as vLLM reserve most VRAM at start-up.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_memory_used_bytes{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\")) / max by (host, vendor, gpu, name) (label_replace(gpu_memory_total_bytes{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "VRAM used",
+      "description": "VRAM in use (solid) and the card's total (dashed). Intel needs --intel-xpu-smi-path.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_memory_used_bytes{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        },
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_memory_total_bytes{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}} total",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* total$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Memory controller utilization",
+      "description": "Share of time the memory controller was busy (NVIDIA utilization.memory, AMD mem_busy_percent).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_memory_utilization_ratio{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "row",
+      "title": "Power",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Power draw",
+      "description": "Power draw (solid) and the power limit (dashed).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 9,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_power_draw_watts{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        },
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_power_limit_watts{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}} limit",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* limit$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Power as % of limit",
+      "description": "Power draw divided by the power limit. Sustained values near 100% mean the GPU is power-limited.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 9,
+        "y": 29,
+        "w": 9,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_power_draw_watts{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\")) / max by (host, vendor, gpu, name) (label_replace(gpu_power_limit_watts{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "Energy over the time range",
+      "description": "Energy used over the dashboard's time range, from gpu_energy_joules_total (reported by Intel hwmon).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 29,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (host) (label_replace(increase(gpu_energy_joules_total{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}[$__range]), \"host\", \"$1\", \"${hostlabel}\", \"(.*)\")) / 3.6e6",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kwatth",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#8e8c84"
+          },
+          "decimals": 2,
+          "displayName": "${__field.labels.host}",
+          "noValue": "No GPU reports energy"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 16,
+      "type": "row",
+      "title": "Thermals & cooling",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Hottest sensor per GPU",
+      "description": "The hottest temperature sensor on each GPU. Per-sensor detail is below.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 38,
+        "w": 24,
+        "h": 7
+      },
+      "targets": [
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_temperature_celsius{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Temperatures — $host",
+      "description": "Every temperature sensor on this host's GPU: edge/gpu = die, junction = hottest point, mem/vram = memory.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 45,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (sensor) (gpu_temperature_celsius{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"$host\"})",
+          "legendFormat": "{{sensor}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^edge( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9085e9"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^gpu( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9085e9"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^pkg( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9085e9"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^junction( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#d55181"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^mem( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#c98500"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^vram( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#c98500"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "repeat": "host",
+      "repeatDirection": "h",
+      "maxPerRow": 3
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Fan speed (%)",
+      "description": "Fan duty as a share of maximum (NVIDIA fan.speed, AMD pwm1 / pwm1_max).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 53,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_fan_speed_ratio{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Fan speed (RPM)",
+      "description": "Fan speed from hwmon fan1_input (AMD, Intel where present).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 53,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_fan_speed_rpm{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "rotrpm",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 21,
+      "type": "row",
+      "title": "Clocks & voltage",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 61,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Graphics clock",
+      "description": "Current graphics clock. Intel: intel_gpu_top's actual frequency.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 62,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_clock_graphics_hz{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "hertz",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "Memory clock",
+      "description": "Current memory clock (NVIDIA, AMD).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 62,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_clock_memory_hz{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "hertz",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Core voltage",
+      "description": "GPU core voltage from hwmon in0_input (AMD vddgfx, Intel).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 62,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host, vendor, gpu, name) (label_replace(gpu_voltage_volts{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "volt",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs",
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 25,
+      "type": "row",
+      "title": "Exporter health",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 70,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 26,
+      "type": "state-timeline",
+      "title": "Collection status",
+      "description": "gpu_exporter_collection_error per exporter. ERROR: nvidia-smi failed, no amdgpu device found, or no fresh intel_gpu_top sample.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 71,
+        "w": 12,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "max by (host, vendor) (label_replace(gpu_exporter_collection_error{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}} ({{vendor}})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "OK",
+                  "color": "#0ca30c",
+                  "index": 0
+                },
+                "1": {
+                  "text": "ERROR",
+                  "color": "#e66767",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#8e8c84"
+          },
+          "custom": {
+            "lineWidth": 0,
+            "fillOpacity": 80
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "auto",
+        "mergeValues": true,
+        "alignValue": "left",
+        "rowHeight": 0.8,
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 27,
+      "type": "state-timeline",
+      "title": "Scrape target up",
+      "description": "Whether Prometheus could scrape the exporter. DOWN means the exporter is not answering.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 71,
+        "w": 12,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "max by (host, job) (label_replace(up{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}} ({{job}})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "UP",
+                  "color": "#0ca30c"
+                },
+                "0": {
+                  "text": "DOWN",
+                  "color": "#e66767"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#8e8c84"
+          },
+          "custom": {
+            "lineWidth": 0,
+            "fillOpacity": 80
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "auto",
+        "mergeValues": true,
+        "alignValue": "left",
+        "rowHeight": 0.8,
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 28,
+      "type": "timeseries",
+      "title": "Age of last successful collection",
+      "description": "Seconds since each exporter last collected successfully. It climbs steadily when an exporter is stuck.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 77,
+        "w": 24,
+        "h": 6
+      },
+      "targets": [
+        {
+          "expr": "time() - max by (host, vendor) (label_replace(gpu_exporter_last_collection_timestamp_seconds{job=~\"${job:regex}\", vendor=~\"${vendor:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 29,
+      "type": "row",
+      "title": "NVIDIA",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 83,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 30,
+      "type": "state-timeline",
+      "title": "Performance state",
+      "description": "nvidia-smi P-state: P0 = maximum performance, P8 = idle, P12+ = minimum.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 84,
+        "w": 24,
+        "h": 5
+      },
+      "targets": [
+        {
+          "expr": "max by (host, gpu) (label_replace(nvidia_gpu_performance_state{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}} gpu{{gpu}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "P0",
+                  "index": 0
+                },
+                "1": {
+                  "text": "P1",
+                  "index": 1
+                },
+                "2": {
+                  "text": "P2",
+                  "index": 2
+                },
+                "3": {
+                  "text": "P3",
+                  "index": 3
+                },
+                "4": {
+                  "text": "P4",
+                  "index": 4
+                },
+                "5": {
+                  "text": "P5",
+                  "index": 5
+                },
+                "6": {
+                  "text": "P6",
+                  "index": 6
+                },
+                "7": {
+                  "text": "P7",
+                  "index": 7
+                },
+                "8": {
+                  "text": "P8",
+                  "index": 8
+                },
+                "9": {
+                  "text": "P9",
+                  "index": 9
+                },
+                "10": {
+                  "text": "P10",
+                  "index": 10
+                },
+                "11": {
+                  "text": "P11",
+                  "index": 11
+                },
+                "12": {
+                  "text": "P12",
+                  "index": 12
+                },
+                "13": {
+                  "text": "P13",
+                  "index": 13
+                },
+                "14": {
+                  "text": "P14",
+                  "index": 14
+                },
+                "15": {
+                  "text": "P15",
+                  "index": 15
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#8e8c84"
+          },
+          "custom": {
+            "lineWidth": 0,
+            "fillOpacity": 80
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "auto",
+        "mergeValues": true,
+        "alignValue": "left",
+        "rowHeight": 0.8,
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 31,
+      "type": "row",
+      "title": "AMD",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 89,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "GTT (system memory mapped for the GPU)",
+      "description": "System RAM the GPU has mapped (solid) and can map (dashed). Grows when VRAM overflows.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 90,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host, gpu) (label_replace(amd_gpu_gtt_used_bytes{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        },
+        {
+          "expr": "max by (host, gpu) (label_replace(amd_gpu_gtt_total_bytes{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}} total",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* total$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 33,
+      "type": "state-timeline",
+      "title": "Runtime power state",
+      "description": "SUSPENDED: the GPU is in runtime power-management sleep and its sensors are not read, so other AMD panels show gaps.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 90,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host, gpu) (label_replace(amd_gpu_runtime_suspended{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}} gpu{{gpu}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "ACTIVE",
+                  "color": "#0ca30c"
+                },
+                "1": {
+                  "text": "SUSPENDED",
+                  "color": "#8e8c84"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#8e8c84"
+          },
+          "custom": {
+            "lineWidth": 0,
+            "fillOpacity": 80
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "auto",
+        "mergeValues": true,
+        "alignValue": "left",
+        "rowHeight": 0.8,
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 34,
+      "type": "row",
+      "title": "Intel",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 98,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 35,
+      "type": "timeseries",
+      "title": "Engine busy",
+      "description": "Busy time per engine class from intel_gpu_top. Video = media decode/encode, Render/3D = shaders, Compute = OpenCL/oneAPI. Select one host to see a single GPU.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 99,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host, engine) (label_replace(intel_gpu_engine_busy_ratio{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{engine}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^Render\\/3D( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3987e5"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^Blitter( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#d95926"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^Video( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#199e70"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^VideoEnhance( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#c98500"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^Compute( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#d55181"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 36,
+      "type": "timeseries",
+      "title": "Engine semaphore / event wait",
+      "description": "Time engines spent waiting on a semaphore (solid) or an event (dashed).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 99,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host, engine) (label_replace(intel_gpu_engine_semaphore_wait_ratio{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{engine}} sema",
+          "refId": "A"
+        },
+        {
+          "expr": "max by (host, engine) (label_replace(intel_gpu_engine_wait_ratio{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{engine}} wait",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^Render\\/3D( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3987e5"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^Blitter( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#d95926"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^Video( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#199e70"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^VideoEnhance( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#c98500"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^Compute( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#d55181"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* wait$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 37,
+      "type": "timeseries",
+      "title": "RC6 residency (sleep)",
+      "description": "Share of time in the RC6 power-saving state. Intel gpu_utilization_ratio is roughly 1 − this.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 107,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host) (label_replace(intel_gpu_rc6_ratio{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 38,
+      "type": "timeseries",
+      "title": "Frequency: actual vs requested",
+      "description": "Actual frequency (solid) against the frequency the driver requested (dashed). Actual below requested means throttling.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 107,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host) (label_replace(gpu_clock_graphics_hz{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\", vendor=\"intel\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        },
+        {
+          "expr": "max by (host) (label_replace(intel_gpu_frequency_requested_hz{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}} requested",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "hertz",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* requested$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 39,
+      "type": "timeseries",
+      "title": "Interrupts",
+      "description": "GPU interrupts per second.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 107,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host) (label_replace(intel_gpu_interrupts_per_second{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 40,
+      "type": "timeseries",
+      "title": "intel_gpu_top power",
+      "description": "Power as reported by intel_gpu_top (mainly integrated GPUs; discrete Arc cards report power through hwmon instead).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 115,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host) (label_replace(intel_gpu_power_gpu_watts{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}} GPU",
+          "refId": "A"
+        },
+        {
+          "expr": "max by (host) (label_replace(intel_gpu_power_package_watts{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}} package",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* package$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "Memory controller bandwidth",
+      "description": "IMC read (solid) and write (dashed) bandwidth from intel_gpu_top, where the platform reports it.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 115,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host) (label_replace(intel_gpu_imc_read_bytes_per_second{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}} read",
+          "refId": "A"
+        },
+        {
+          "expr": "max by (host) (label_replace(intel_gpu_imc_write_bytes_per_second{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}} write",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "spanNulls": 120000,
+            "axisSoftMin": 0
+          },
+          "noValue": "Not reported by these GPUs"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* write$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 42,
+      "type": "state-timeline",
+      "title": "hwmon / xpu-smi status",
+      "description": "Whether the exporter could read hwmon (power, energy, temperature) and xpu-smi (memory).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 115,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (host) (label_replace(intel_exporter_hwmon_error{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}} hwmon",
+          "refId": "A"
+        },
+        {
+          "expr": "max by (host) (label_replace(intel_exporter_xpu_error{job=~\"${job:regex}\", ${hostlabel}=~\"${host:regex}\"}, \"host\", \"$1\", \"${hostlabel}\", \"(.*)\"))",
+          "legendFormat": "{{host}} xpu-smi",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "OK",
+                  "color": "#0ca30c",
+                  "index": 0
+                },
+                "1": {
+                  "text": "ERROR",
+                  "color": "#e66767",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#8e8c84"
+          },
+          "custom": {
+            "lineWidth": 0,
+            "fillOpacity": 80
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "auto",
+        "mergeValues": true,
+        "alignValue": "left",
+        "rowHeight": 0.8,
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    }
+  ]
+}
