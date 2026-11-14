@@ -8,7 +8,7 @@ A Prometheus exporter for GPU metrics from NVIDIA, AMD and Intel GPUs. Each inst
 | `amd` | the `amdgpu` kernel driver through sysfs (no ROCm needed) | [AMD GPUs](#amd-gpus) |
 | `intel` | `intel_gpu_top`, plus hwmon and optionally `xpu-smi` | [Intel GPUs](#intel-gpus) |
 
-All backends export the same [common `gpu_*` metrics](#common-metrics), so one dashboard or alert works for every vendor. Metrics that only one vendor has keep a vendor prefix (`nvidia_`, `amd_`, `intel_`). Metrics are exposed on an HTTP endpoint for Prometheus scraping.
+All backends export the same [common `gpu_*` metrics](#common-metrics), so one dashboard or alert works for every vendor. A ready-made [Grafana dashboard](#grafana-dashboard) covers all of them. Metrics that only one vendor has keep a vendor prefix (`nvidia_`, `amd_`, `intel_`). Metrics are exposed on an HTTP endpoint for Prometheus scraping.
 
 ## Requirements
 
@@ -219,6 +219,30 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9835']
 ```
+
+## Grafana dashboard
+
+[`dashboards/gpus.json`](dashboards/gpus.json) shows every GPU from one or more exporters (any mix of NVIDIA, AMD and Intel). It needs exporter 0.5.0 or newer and Grafana 10.4 or newer.
+
+![GPU dashboard](docs/dashboard.png)
+
+It is organized in rows:
+
+- **Overview**: exporters with errors, total power, busiest GPU, hottest sensor, and a table with one row per GPU
+- **Utilization & memory**, **Power**, **Thermals & cooling**, **Clocks & voltage**: the common `gpu_*` metrics, one line per GPU
+- **Exporter health**: collection errors, scrape status and the age of the last successful collection
+- **NVIDIA**, **AMD**, **Intel**: P-state; GTT memory and runtime power state; engine busy time, RC6, frequency and the `intel_gpu_top` extras
+
+A panel says "Not reported by these GPUs" when none of the selected GPUs has that sensor (for example fan RPM on most NVIDIA cards).
+
+To import it: in Grafana go to **Dashboards → New → Import**, upload `dashboards/gpus.json`, and save. Then set the variables at the top:
+
+| Variable | What to set |
+|---|---|
+| Data source | Your Prometheus |
+| Host label | The label that names a host. `instance` (the default) works for a plain Prometheus scrape. If your pipeline adds its own host label, pick it instead (for example `host_name` with OpenTelemetry). This matters when several hosts are scraped as `localhost`, such as by a local agent. |
+| Job | Found automatically: every scrape job that exports `gpu_exporter_collection_error` |
+| Vendor, Host | Filters; both default to all |
 
 ## License
 
