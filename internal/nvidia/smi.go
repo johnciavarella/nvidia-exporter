@@ -95,6 +95,14 @@ func parseLine(line string) (GPUStats, error) {
 	}
 
 	var gpu GPUStats
+	for i, f := range fields {
+		if isNA(strings.TrimSpace(f)) {
+			if gpu.NA == nil {
+				gpu.NA = map[string]bool{}
+			}
+			gpu.NA[queryFields[i]] = true
+		}
+	}
 
 	// index
 	idx, err := parseIntOrNA(fields[0])

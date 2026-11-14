@@ -18,6 +18,8 @@ type Collector struct {
 	provider nvidia.Provider
 	interval time.Duration
 	logger   *slog.Logger
+	legacy   bool
+	common   *commonDescs
 
 	mu         sync.RWMutex
 	stats      []nvidia.GPUStats
@@ -51,6 +53,8 @@ func New(provider nvidia.Provider, interval time.Duration, logger *slog.Logger) 
 		provider: provider,
 		interval: interval,
 		logger:   logger,
+		legacy:   true,
+		common:   newCommonDescs(),
 
 		gpuUtilization: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "gpu", "utilization_ratio"),
@@ -126,8 +130,21 @@ func New(provider nvidia.Provider, interval time.Duration, logger *slog.Logger) 
 	}
 }
 
+// SetLegacy turns the nvidia_* metrics that duplicate the common gpu_* metrics
+// on or off (default on). nvidia_gpu_performance_state has no common
+// equivalent and is always exported.
+func (c *Collector) SetLegacy(on bool) *Collector {
+	c.legacy = on
+	return c
+}
+
 // Describe implements prometheus.Collector.
 func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
+	c.common.describe(ch)
+	ch <- c.perfState
+	if !c.legacy {
+		return
+	}
 	ch <- c.gpuUtilization
 	ch <- c.memUtilization
 	ch <- c.memUsed
@@ -138,7 +155,6 @@ func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.fanSpeed
 	ch <- c.clockGraphics
 	ch <- c.clockMemory
-	ch <- c.perfState
 	ch <- c.collectTimestamp
 	ch <- c.collectDuration
 	ch <- c.collectError
@@ -154,10 +170,15 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 
 	// Emit GPU metrics
 	for _, gpu := range stats {
+		c.common.emit(ch, nvidiaCommon(gpu))
 		labels := []string{
 			strconv.Itoa(gpu.Index),
 			gpu.Name,
 			gpu.UUID,
+		}
+		ch <- prometheus.MustNewConstMetric(c.perfState, prometheus.GaugeValue, float64(gpu.PerformanceState), labels...)
+		if !c.legacy {
+			continue
 		}
 
 		ch <- prometheus.MustNewConstMetric(c.gpuUtilization, prometheus.GaugeValue, gpu.UtilizationGPU/100, labels...)
@@ -170,7 +191,11 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(c.fanSpeed, prometheus.GaugeValue, gpu.FanSpeed/100, labels...)
 		ch <- prometheus.MustNewConstMetric(c.clockGraphics, prometheus.GaugeValue, gpu.ClockGraphics*1e6, labels...)
 		ch <- prometheus.MustNewConstMetric(c.clockMemory, prometheus.GaugeValue, gpu.ClockMemory*1e6, labels...)
-		ch <- prometheus.MustNewConstMetric(c.perfState, prometheus.GaugeValue, float64(gpu.PerformanceState), labels...)
+	}
+
+	c.common.emitExporter(ch, "nvidia", lastUpdate, lastError != nil)
+	if !c.legacy {
+		return
 	}
 
 	// Emit exporter meta metrics
@@ -226,4 +251,34 @@ func (c *Collector) collect(ctx context.Context) {
 		c.lastError = nil
 	}
 	c.mu.Unlock()
+}
+
+// nvidiaCommon converts nvidia-smi stats to the common metrics, leaving out
+// the fields nvidia-smi reported as [N/A] or [Not Supported].
+func nvidiaCommon(g nvidia.GPUStats) gpuStats {
+	opt := func(field string, v float64) *float64 {
+		if !g.Supported(field) {
+			return nil
+		}
+		return &v
+	}
+	s := gpuStats{
+		Index:             strconv.Itoa(g.Index),
+		Vendor:            "nvidia",
+		Name:              g.Name,
+		ID:                g.UUID,
+		Utilization:       opt("utilization.gpu", g.UtilizationGPU/100),
+		MemoryUtilization: opt("utilization.memory", g.UtilizationMem/100),
+		MemoryUsed:        opt("memory.used", float64(g.MemoryUsed)),
+		MemoryTotal:       opt("memory.total", float64(g.MemoryTotal)),
+		PowerDraw:         opt("power.draw", g.PowerDraw),
+		PowerLimit:        opt("power.limit", g.PowerLimit),
+		FanRatio:          opt("fan.speed", g.FanSpeed/100),
+		ClockGraphics:     opt("clocks.current.graphics", g.ClockGraphics*1e6),
+		ClockMemory:       opt("clocks.current.memory", g.ClockMemory*1e6),
+	}
+	if g.Supported("temperature.gpu") {
+		s.Temps = map[string]float64{"gpu": g.Temperature}
+	}
+	return s
 }

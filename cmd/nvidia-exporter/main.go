@@ -13,6 +13,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/woo/nvidia-exporter/internal/amd"
 	"github.com/woo/nvidia-exporter/internal/collector"
 	"github.com/woo/nvidia-exporter/internal/intel"
 	"github.com/woo/nvidia-exporter/internal/nvidia"
@@ -22,13 +23,15 @@ func main() {
 	var (
 		listenAddress   = flag.String("listen-address", ":9835", "Address to listen on for HTTP requests")
 		metricsPath     = flag.String("metrics-path", "/metrics", "Path under which to expose metrics")
-		backend         = flag.String("backend", "nvidia", "GPU backend to collect from: nvidia (nvidia-smi) or intel (intel_gpu_top)")
+		backend         = flag.String("backend", "nvidia", "GPU backend to collect from: nvidia (nvidia-smi), amd (amdgpu sysfs) or intel (intel_gpu_top)")
 		nvidiaSMIPath   = flag.String("nvidia-smi-path", "nvidia-smi", "Path to nvidia-smi binary")
 		intelGPUTopPath = flag.String("intel-gpu-top-path", "intel_gpu_top", "Path to intel_gpu_top binary (backend=intel)")
 		intelDevice     = flag.String("intel-device", "", "intel_gpu_top device filter, e.g. drm:/dev/dri/renderD128 (backend=intel; default: first GPU)")
 		intelHwmon      = flag.String("intel-hwmon", "auto", "Intel GPU hwmon directory for power/energy/temperature/fan (backend=intel): auto, off, or a path like /sys/class/drm/card1/device/hwmon/hwmon5")
 		intelXPUSMI     = flag.String("intel-xpu-smi-path", "", "Path to xpu-smi; when set, GPU memory used/total is exported (backend=intel; needs root)")
 		intelXPUDevice  = flag.String("intel-xpu-device", "0", "xpu-smi device id for --intel-xpu-smi-path (backend=intel)")
+		amdSysfsRoot    = flag.String("amd-sysfs-root", "/sys", "sysfs mount point to read amdgpu devices from (backend=amd)")
+		legacyMetrics   = flag.Bool("legacy-metrics", true, "Also export the vendor-prefixed nvidia_*/intel_* metrics that duplicate the common gpu_* metrics")
 		collectInterval = flag.Duration("collect-interval", 10*time.Second, "Interval between metric collections (sampling period for backend=intel)")
 		logLevel        = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 	)
@@ -45,6 +48,8 @@ func main() {
 		"metrics_path", *metricsPath,
 		"nvidia_smi_path", *nvidiaSMIPath,
 		"intel_gpu_top_path", *intelGPUTopPath,
+		"amd_sysfs_root", *amdSysfsRoot,
+		"legacy_metrics", *legacyMetrics,
 		"collect_interval", *collectInterval,
 		"log_level", *logLevel,
 	)
@@ -59,7 +64,7 @@ func main() {
 	switch *backend {
 	case "nvidia":
 		provider := nvidia.NewSMIProvider(*nvidiaSMIPath)
-		coll := collector.New(provider, *collectInterval, logger)
+		coll := collector.New(provider, *collectInterval, logger).SetLegacy(*legacyMetrics)
 		reg.MustRegister(coll)
 		go coll.Run(ctx)
 	case "intel":
@@ -70,8 +75,7 @@ func main() {
 		}
 		provider := intel.NewGPUTopProvider(*intelGPUTopPath, *intelDevice, *collectInterval, logger)
 		// A sample is stale after three sampling periods plus a startup margin.
-		coll := collector.NewIntel(provider, device, 3**collectInterval+5*time.Second)
-		reg.MustRegister(coll)
+		coll := collector.NewIntel(provider, device, 3**collectInterval+5*time.Second).SetLegacy(*legacyMetrics)
 		if hw := openHwmon(*intelHwmon, *intelDevice, logger); hw != nil {
 			coll.WithHwmon(hw)
 		}
@@ -81,9 +85,20 @@ func main() {
 			go xpu.Run(ctx)
 			logger.Info("xpu-smi memory metrics enabled", "path", *intelXPUSMI, "device", *intelXPUDevice)
 		}
+		reg.MustRegister(coll)
 		go provider.Run(ctx)
+	case "amd":
+		title = "AMD GPU Exporter"
+		cards := amd.Discover(*amdSysfsRoot)
+		if len(cards) == 0 {
+			logger.Warn("no amdgpu devices found; gpu_exporter_collection_error will be 1 until one appears", "sysfs_root", *amdSysfsRoot)
+		}
+		for _, c := range cards {
+			logger.Info("found amdgpu device", "card", c.Index, "pci", c.PCISlot, "name", c.Name, "hwmon", c.HwmonDir)
+		}
+		reg.MustRegister(collector.NewAMD(*amdSysfsRoot))
 	default:
-		logger.Error("unknown backend, want nvidia or intel", "backend", *backend)
+		logger.Error("unknown backend, want nvidia, amd or intel", "backend", *backend)
 		os.Exit(2)
 	}
 

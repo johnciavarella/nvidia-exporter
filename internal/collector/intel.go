@@ -5,6 +5,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/woo/nvidia-exporter/internal/intel"
+	"github.com/woo/nvidia-exporter/internal/sysfs"
 )
 
 const intelNamespace = "intel"
@@ -17,6 +18,9 @@ type IntelCollector struct {
 	provider intel.Provider
 	maxAge   time.Duration
 	now      func() time.Time
+	legacy   bool
+	common   *commonDescs
+	name, id string // common "name" and "id" labels
 
 	engineBusy    *prometheus.Desc
 	engineSema    *prometheus.Desc
@@ -63,6 +67,9 @@ func NewIntel(provider intel.Provider, device string, maxAge time.Duration) *Int
 		provider: provider,
 		maxAge:   maxAge,
 		now:      time.Now,
+		legacy:   true,
+		common:   newCommonDescs(),
+		id:       device,
 
 		engineBusy:    desc("gpu", "engine_busy_ratio", "Fraction of the sampling period the engine was busy (0-1)", engineLabels),
 		engineSema:    desc("gpu", "engine_semaphore_wait_ratio", "Fraction of the sampling period the engine waited on a semaphore (0-1)", engineLabels),
@@ -119,54 +126,94 @@ func (c *IntelCollector) WithXPU(x intel.XPUProvider) *IntelCollector {
 // WithHwmon enables the hwmon sensor metrics (power, energy, voltage,
 // temperature, fan), which are read at scrape time and do not depend on
 // intel_gpu_top. It returns the collector for chaining.
+//
+// The hwmon's PCI device also names the GPU in the common metrics: "id" becomes
+// its PCI address and "name" its PCI ID.
 func (c *IntelCollector) WithHwmon(h *intel.Hwmon) *IntelCollector {
 	c.hwmon = h
+	if slot := sysfs.PCISlot(h.DeviceDir()); slot != "" {
+		c.id = slot
+	}
+	c.name = sysfs.PCIID(h.DeviceDir())
+	return c
+}
+
+// SetLegacy turns the intel_* metrics that duplicate the common gpu_* metrics
+// on or off (default on).
+func (c *IntelCollector) SetLegacy(on bool) *IntelCollector {
+	c.legacy = on
 	return c
 }
 
 // Describe implements prometheus.Collector.
 func (c *IntelCollector) Describe(ch chan<- *prometheus.Desc) {
+	c.common.describe(ch)
 	for _, d := range []*prometheus.Desc{
-		c.engineBusy, c.engineSema, c.engineWait, c.freqActual, c.freqRequested,
+		c.engineBusy, c.engineSema, c.engineWait, c.freqRequested,
 		c.rc6, c.interrupts, c.powerGPU, c.powerPackage, c.imcRead, c.imcWrite,
-		c.collectTime, c.collectError,
 	} {
 		ch <- d
 	}
+	if c.legacy {
+		ch <- c.freqActual
+		ch <- c.collectTime
+		ch <- c.collectError
+	}
 	if c.xpu != nil {
-		for _, d := range []*prometheus.Desc{c.memUsed, c.memTotal, c.xpuError} {
-			ch <- d
+		ch <- c.xpuError
+		if c.legacy {
+			ch <- c.memUsed
+			ch <- c.memTotal
 		}
 	}
 	if c.hwmon != nil {
-		for _, d := range []*prometheus.Desc{
-			c.hwEnergy, c.hwPower, c.hwPowerLimit, c.hwVoltage, c.hwTemp, c.hwFan, c.hwmonError,
-		} {
-			ch <- d
+		ch <- c.hwmonError
+		if c.legacy {
+			for _, d := range []*prometheus.Desc{
+				c.hwEnergy, c.hwPower, c.hwPowerLimit, c.hwVoltage, c.hwTemp, c.hwFan,
+			} {
+				ch <- d
+			}
 		}
 	}
 }
 
-func (c *IntelCollector) collectXPU(ch chan<- prometheus.Metric) {
+func (c *IntelCollector) collectXPU(ch chan<- prometheus.Metric, cs *gpuStats) {
 	st, at, err := c.xpu.Latest()
 	if err != nil || c.now().Sub(at) > c.maxAge {
 		ch <- prometheus.MustNewConstMetric(c.xpuError, prometheus.GaugeValue, 1)
 		return
 	}
 	ch <- prometheus.MustNewConstMetric(c.xpuError, prometheus.GaugeValue, 0)
+	cs.MemoryUsed = f64(st.MemoryUsedBytes)
+	cs.MemoryTotal = st.MemoryTotalBytes
+	if !c.legacy {
+		return
+	}
 	ch <- prometheus.MustNewConstMetric(c.memUsed, prometheus.GaugeValue, st.MemoryUsedBytes)
 	if st.MemoryTotalBytes != nil {
 		ch <- prometheus.MustNewConstMetric(c.memTotal, prometheus.GaugeValue, *st.MemoryTotalBytes)
 	}
 }
 
-func (c *IntelCollector) collectHwmon(ch chan<- prometheus.Metric) {
+func (c *IntelCollector) collectHwmon(ch chan<- prometheus.Metric, cs *gpuStats) {
 	st, err := c.hwmon.Read()
 	if err != nil {
 		ch <- prometheus.MustNewConstMetric(c.hwmonError, prometheus.GaugeValue, 1)
 		return
 	}
 	ch <- prometheus.MustNewConstMetric(c.hwmonError, prometheus.GaugeValue, 0)
+	cs.EnergyJoules = f64(st.EnergyJoules)
+	cs.PowerDraw = st.PowerWatts
+	cs.PowerLimit = st.PowerLimit
+	cs.Voltage = st.VoltageV
+	cs.FanRPM = st.FanRPM
+	if len(st.Temps) > 0 {
+		cs.Temps = st.Temps
+	}
+	if !c.legacy {
+		return
+	}
 	ch <- prometheus.MustNewConstMetric(c.hwEnergy, prometheus.CounterValue, st.EnergyJoules)
 	opt := func(d *prometheus.Desc, v *float64) {
 		if v != nil {
@@ -183,18 +230,42 @@ func (c *IntelCollector) collectHwmon(ch chan<- prometheus.Metric) {
 }
 
 // Collect implements prometheus.Collector.
+//
+// The common gpu_* metrics combine all sources: hwmon and xpu-smi values are
+// exported even while intel_gpu_top is failing.
 func (c *IntelCollector) Collect(ch chan<- prometheus.Metric) {
+	cs := gpuStats{Index: "0", Vendor: "intel", Name: c.name, ID: c.id}
 	if c.hwmon != nil {
-		c.collectHwmon(ch)
+		c.collectHwmon(ch, &cs)
 	}
 	if c.xpu != nil {
-		c.collectXPU(ch)
+		c.collectXPU(ch, &cs)
 	}
 
 	s, at, err := c.provider.Latest()
+	fresh := err == nil && c.now().Sub(at) <= c.maxAge
+	if fresh {
+		busiest := 0.0
+		for _, e := range s.Engines {
+			busiest = max(busiest, e.Busy/100)
+		}
+		cs.Utilization = f64(busiest)
+		cs.ClockGraphics = f64(s.FrequencyActual * 1e6)
+		if cs.PowerDraw == nil && s.PowerGPU != nil {
+			cs.PowerDraw = s.PowerGPU
+		}
+	}
+	c.common.emit(ch, cs)
+	if fresh {
+		c.common.emitExporter(ch, "intel", at, false)
+	} else {
+		c.common.emitExporter(ch, "intel", time.Time{}, true)
+	}
 
-	if err != nil || c.now().Sub(at) > c.maxAge {
-		ch <- prometheus.MustNewConstMetric(c.collectError, prometheus.GaugeValue, 1)
+	if !fresh {
+		if c.legacy {
+			ch <- prometheus.MustNewConstMetric(c.collectError, prometheus.GaugeValue, 1)
+		}
 		return
 	}
 
@@ -207,7 +278,6 @@ func (c *IntelCollector) Collect(ch chan<- prometheus.Metric) {
 		gauge(c.engineSema, e.Sema/100, name)
 		gauge(c.engineWait, e.Wait/100, name)
 	}
-	gauge(c.freqActual, s.FrequencyActual*1e6)
 	gauge(c.freqRequested, s.FrequencyRequested*1e6)
 	gauge(c.rc6, s.RC6/100)
 	gauge(c.interrupts, s.Interrupts)
@@ -224,6 +294,9 @@ func (c *IntelCollector) Collect(ch chan<- prometheus.Metric) {
 		gauge(c.imcWrite, *s.IMCWrites*1048576)
 	}
 
-	gauge(c.collectTime, float64(at.Unix()))
-	gauge(c.collectError, 0)
+	if c.legacy {
+		gauge(c.freqActual, s.FrequencyActual*1e6)
+		gauge(c.collectTime, float64(at.Unix()))
+		gauge(c.collectError, 0)
+	}
 }
